@@ -10,6 +10,9 @@
         input[type="url"] { width: 70%; padding: 5px; }
         input[type="submit"] { padding: 5px 10px; }
         #content { width: 100%; height: 300px; }
+        #status { margin-top: 10px; color: #777; }
+        .loader { display: none; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -17,7 +20,9 @@
     <form id="extractForm">
         <input type="url" id="urlInput" placeholder="Enter URL" required>
         <input type="submit" value="Extract Content">
+        <div class="loader" id="loader"></div>
     </form>
+    <div id="status"></div>
     <textarea id="content" readonly></textarea>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.3/purify.min.js"></script>
@@ -25,22 +30,51 @@
         document.getElementById('extractForm').addEventListener('submit', function(e) {
             e.preventDefault();
             var url = document.getElementById('urlInput').value;
-            fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`)
-                .then(response => response.json())
+            var statusDiv = document.getElementById('status');
+            var contentArea = document.getElementById('content');
+            var loader = document.getElementById('loader');
+
+            statusDiv.textContent = "Fetching content...";
+            contentArea.value = "";
+            loader.style.display = 'inline-block';
+
+            // Set a timeout of 30 seconds
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timed out')), 30000)
+            );
+
+            Promise.race([
+                fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`),
+                timeoutPromise
+            ])
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    if (!data.contents) {
+                        throw new Error("No content received from the server");
+                    }
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(data.contents, 'text/html');
                     var targetDiv = doc.querySelector('div.entry-content.medium-form[itemprop="articleBody"]');
                     if (targetDiv) {
                         var paragraphs = targetDiv.getElementsByTagName('p');
                         var content = Array.from(paragraphs).map(p => p.textContent.trim()).join('\n\n');
-                        document.getElementById('content').value = DOMPurify.sanitize(content);
+                        contentArea.value = DOMPurify.sanitize(content);
+                        statusDiv.textContent = "Content extracted successfully.";
                     } else {
-                        document.getElementById('content').value = "Div not found on the page.";
+                        statusDiv.textContent = "Div not found on the page.";
                     }
                 })
                 .catch(error => {
-                    document.getElementById('content').value = "Error fetching the page: " + error.message;
+                    console.error('Error:', error);
+                    statusDiv.textContent = "Error: " + error.message;
+                })
+                .finally(() => {
+                    loader.style.display = 'none';
                 });
         });
     </script>
