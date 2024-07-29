@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Content Extractor</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; }
+        form { margin-bottom: 20px; }
+        input[type="url"] { width: 70%; padding: 5px; }
+        input[type="submit"] { padding: 5px 10px; }
+        #content { width: 100%; height: 300px; }
+    </style>
+</head>
+<body>
+    <h1>Web Content Extractor</h1>
+    <form id="extractForm">
+        <input type="url" id="urlInput" placeholder="Enter URL" required>
+        <input type="submit" value="Extract Content">
+    </form>
+    <textarea id="content" readonly></textarea>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.3/purify.min.js"></script>
+    <script>
+        document.getElementById('extractForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var url = document.getElementById('urlInput').value;
+            fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`)
+                .then(response => response.json())
+                .then(data => {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(data.contents, 'text/html');
+                    var targetDiv = doc.querySelector('div.entry-content.medium-form[itemprop="articleBody"]');
+                    if (targetDiv) {
+                        var paragraphs = targetDiv.getElementsByTagName('p');
+                        var content = Array.from(paragraphs).map(p => p.textContent.trim()).join('\n\n');
+                        document.getElementById('content').value = DOMPurify.sanitize(content);
+                    } else {
+                        document.getElementById('content').value = "Div not found on the page.";
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('content').value = "Error fetching the page: " + error.message;
+                });
+        });
+    </script>
+</body>
+</html>
